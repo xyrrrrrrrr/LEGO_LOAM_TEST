@@ -30,10 +30,6 @@ private:
     pcl::PointCloud<pcl::PointXYZ>::Ptr origin_pc(new pcl::PointCloud<pcl::PointXYZ>());
     // create a point cloud to store the transformed point cloud
     pcl::PointCloud<pcl::PointXYZ>::Ptr gps_pc(new pcl::PointCloud<pcl::PointXYZ>());
-    // create a point cloud to store the transformed point cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudGPS(new pcl::PointCloud<pcl::PointXYZI>());
-    // create a point cloud to store the origin point cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn(new pcl::PointCloud<pcl::PointXYZI>());
     // gps数据队列互斥锁
     std::mutex gps_queue_mutex;
     // gps数据队列
@@ -52,7 +48,9 @@ public:
             return(-1);
         }
     // create a gps subscriber
-    subGPS = nh.subscribe("/gpsdemo", 1000, &TransformTogps::gpsHandler, this);      
+    subGPS = nh.subscribe("/gpsdemo", 1000, &TransformTogps::gpsHandler, this);   
+    // create a rotation matrix publisher
+    pubRotationMatrix = nh.advertise<sensor_msgs::PointCloud2>("/rotation_matrix", 2);
     // create a publisher to publish the transformed(gps) point cloud  
     pubLaserCloudGPS = nh.advertise<sensor_msgs::PointCloud2>("/gps_pointcloud", 2)           
     }
@@ -107,7 +105,11 @@ public:
         //旋转矩阵和平移向量凑成变换矩阵
         transformMatrix.block<3, 3>(0, 0) = rotationMatrix;
         transformMatrix.topRightCorner(3, 1) = t;
-
+        // 发布变换矩阵
+        pcl::toROSMsg(*transformMatrix, tMatrix);
+        tMatrix->header.stamp = ros::Time().fromSec(timeLaserCloudGPS);
+        tMatrix->header.frame_id = "/gps_enu";
+        pubRotationMatrix.publish(tMatrix);
         // 将在初始坐标系下的点云转换到gps坐标系下
         pcl::transformPointCloud(*origin_pc, *gps_pc, transformMatrix);
 
