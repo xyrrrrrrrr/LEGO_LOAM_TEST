@@ -50,7 +50,7 @@ public:
     // create a gps subscriber
     subGPS = nh.subscribe("/gpsdemo", 1000, &TransformTogps::gpsHandler, this);   
     // create a rotation matrix publisher
-    pubRotationMatrix = nh.advertise<sensor_msgs::PointCloud2>("/rotation_matrix", 2);
+    pubtMatrix = nh.advertise<sensor_msgs::PointCloud2>("/tranform_matrix", 2);
     // create a publisher to publish the transformed(gps) point cloud  
     pubLaserCloudGPS = nh.advertise<sensor_msgs::PointCloud2>("/gps_pointcloud", 2)           
     }
@@ -109,7 +109,7 @@ public:
         pcl::toROSMsg(*transformMatrix, tMatrix);
         tMatrix->header.stamp = ros::Time().fromSec(timeLaserCloudGPS);
         tMatrix->header.frame_id = "/gps_enu";
-        pubRotationMatrix.publish(tMatrix);
+        pubtMatrix.publish(tMatrix);
         // 将在初始坐标系下的点云转换到gps坐标系下
         pcl::transformPointCloud(*origin_pc, *gps_pc, transformMatrix);
 
