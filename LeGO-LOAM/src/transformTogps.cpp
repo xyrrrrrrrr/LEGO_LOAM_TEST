@@ -9,8 +9,10 @@
 #include <pcl/point_types.h>
 #include <string>
 #include <string.h>
+#include <sstream>
 #include "std_msgs/String.h"
 #include "math.h"
+// #include <lego-loam/matrix_msg.h>
 
 // create a class to transform the point cloud to GPS coordinate system in real time
 
@@ -20,7 +22,7 @@ private:
 
     ros::NodeHandle nh;
     // create a publisher to publish the rotation matrix
-    ros::Publisher pubRotationMatrix;
+    ros::Publisher pubtMatrix;
     // create a publisher to publish the transformed(gps) point cloud
     ros::Publisher pubLaserCloudGPS;
     // create a subscriber to subscribe the point cloud(origin)
@@ -35,7 +37,7 @@ private:
     // gps数据队列互斥锁
     std::mutex gps_queue_mutex;
     // gps数据队列
-    std::deque<std_msgs::string> gps_queue;
+    std::deque<std_msgs::String> gps_queue;
 
     // // create 2 arrays to store the gps data (for the first frame and the last frame)
     // double gps[6];
@@ -47,18 +49,18 @@ public:
     if(pcl::io::loadPCDFile<pcl::PointXYZ>(pointclouddir,*origin_pc)==-1)//*打开点云文件
         {
             PCL_ERROR("Couldn't read file, check file or dir\n");
-            return(-1);
+            return;
         }
     // create a gps subscriber
     subGPS = nh.subscribe("/gpsdemo", 1000, &TransformTogps::gpsHandler, this);   
     // create a rotation matrix publisher
-    pubtMatrix = nh.advertise<sensor_msgs::PointCloud2>("/tranform_matrix", 2);
+    pubtMatrix = nh.advertise<std_msgs::String>("/tranform_matrix", 2);
     // create a publisher to publish the transformed(gps) point cloud  
     pubLaserCloudGPS = nh.advertise<sensor_msgs::PointCloud2>("/gps_pointcloud", 2);           
     }
 
     // create a function to get the gps data
-    void gpsHandler(const sensor_msgs::JointStateConstPtr &gpsMsg){
+    void gpsHandler(const std_msgs::String &gpsMsg){
         //gps数据队列
         gps_queue.push_back(gpsMsg);
         if (gps_queue.size() > 100)
@@ -67,15 +69,25 @@ public:
             return;
         // calculate the rotation matrix
         double R[3][3];
-        string gps_first_string = gps_queue.front()
-        string gps_last_string = gps_queue.back()
+        std_msgs::String gps_first_msg = gps_queue.front();
+        std_msgs::String gps_last_msg = gps_queue.back();
+        string gps_first_string = gps_first_msg.data;
+        string gps_last_string = gps_last_msg.data;
+        // 把string转换成char*
+        char *gps_first_char = new char[gps_first_string.length() + 1];
+        char *gps_last_char = new char[gps_last_string.length() + 1];
         // gps string的格式是：data: "0.000000, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000", 
         // 六个double型数据对应北方(x)，东方(y)，高度(z)，heading, pitch, roll, 用逗号分隔
         // 读取gps数据
         double gps_first[6];
         double gps_last[6];
-        sscanf(gps_first_string, "%lf, %lf, %lf, %lf, %lf, %lf", &gps_first[0], &gps_first[1], &gps_first[2], &gps_first[3], &gps_first[4], &gps_first[5]);
-        sscanf(gps_last_string, "%lf, %lf, %lf, %lf, %lf, %lf", &gps_last[0], &gps_last[1], &gps_last[2], &gps_last[3], &gps_last[4], &gps_last[5]);
+        for (int i = 0; i < 6; i++)
+        {
+            gps_first[i] = 0;
+            gps_last[i] = 0;
+        }
+        sscanf(gps_first_char, "%lf, %lf, %lf, %lf, %lf, %lf", &gps_first[0], &gps_first[1], &gps_first[2], &gps_first[3], &gps_first[4], &gps_first[5]);
+        sscanf(gps_last_char, "%lf, %lf, %lf, %lf, %lf, %lf", &gps_last[0], &gps_last[1], &gps_last[2], &gps_last[3], &gps_last[4], &gps_last[5]);
         // 计算旋转矩阵
         double x_diff = gps_last[0] - gps_first[0];
         double y_diff = gps_last[1] - gps_first[1];
@@ -104,28 +116,31 @@ public:
         //旋转矩阵和平移向量凑成变换矩阵
         transformMatrix.block<3, 3>(0, 0) = rotationMatrix;
         transformMatrix.topRightCorner(3, 1) = t;
-        // 将变换矩阵转换为std_msgs::string类型
-        std_msgs::string tranform_matrix;
-        
+        // 将变换矩阵转换为std_msgs::String类型
+        std_msgs::String tranform_matrix;
+        std::stringstream ss;
+        ss << transformMatrix;
+        tranform_matrix.data = ss.str();
         // 发布变换矩阵
         pubtMatrix.publish(tranform_matrix);
         // 将在初始坐标系下的点云转换到gps坐标系下
         pcl::transformPointCloud(*origin_pc, *gps_pc, transformMatrix);
-
+        pubLaserCloudGPS.publish(gps_pc);
 
     }
 
-    // create a function to publish the transformed point cloud
-    void publishGPSPointCloud(){
-        // publish the transformed point cloud
-        pcl::toROSMsg(*gps_pc, laserCloudGPS);
-        laserCloudGPS->header.stamp = ros::Time().fromSec(timeLaserCloudGPS);
-        laserCloudGPS->header.frame_id = "/gps_enu";
-        pubLaserCloudGPS.publish(laserCloudGPS);
-    }
+
+};   
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "lego_loam");
     
+    TransformTogps Togps;
 
+    ROS_INFO("\033[1;32m---->\033[0m Transform To GPS Started.");
 
+    ros::spin();
 
-
-}   
+    return 0;
+}

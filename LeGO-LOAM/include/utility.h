@@ -52,7 +52,7 @@ typedef pcl::PointXYZI  PointType;
 
 extern const string pointCloudTopic = "/velodyne_points";
 extern const string imuTopic = "/imu/data";
-extern const string pointclouddir = "/home/lego-loam/pcd/"
+extern const string pointclouddir = "/home/lego-loam/pcd/";
 
 // Save pcd
 extern const string fileDirectory = "/tmp/";
