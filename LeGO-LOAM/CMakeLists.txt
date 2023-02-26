@@ -28,7 +28,7 @@ find_package(OpenCV REQUIRED QUIET)
 
 add_message_files(
           FILES
-          staff.msg
+          matrix_msg.msg
 )
 
 generate_messages(
